@@ -153,6 +153,17 @@ function toast(msg) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
   clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 1800);
 }
+function errText(e) {
+  if (e === undefined) return '(undefined – geen foutinfo)';
+  if (e === null) return '(null)';
+  if (typeof e !== 'object') return typeof e + ': ' + String(e);
+  let out = (e.name || e.constructor && e.constructor.name || 'Object') + ': ' + (e.message || '');
+  try { const j = JSON.stringify(e); if (j && j !== '{}') out += ' ' + j; } catch {}
+  if (!e.message) out += ' ' + String(e);
+  return out;
+}
+window.addEventListener('error', ev => log('JS-fout: ' + ev.message + ' (r' + ev.lineno + ')'));
+window.addEventListener('unhandledrejection', ev => log('Onafgehandeld: ' + errText(ev.reason)));
 function setStatus(text, state) {
   $('statusText').textContent = text;
   $('dot').className = 'dot' + (state ? ' ' + state : '');
@@ -204,14 +215,25 @@ async function connect(acceptAll) {
       : { filters: [{ services: [SVC] }, { namePrefix: 'PLR' }, { namePrefix: 'GLM' }, { namePrefix: 'Bosch' }],
           optionalServices: [SVC] };
     setStatus('Apparaat kiezen…', 'busy');
-    device = await navigator.bluetooth.requestDevice(opts);
+    log('Zoeken: ' + (acceptAll ? 'alle apparaten' : 'Bosch-filter'));
+    try {
+      device = await navigator.bluetooth.requestDevice(opts);
+    } catch (e1) {
+      log('Zoeken mislukt: ' + errText(e1));
+      if (acceptAll) throw e1;
+      log('Opnieuw met eenvoudiger filter (alleen naam)…');
+      device = await navigator.bluetooth.requestDevice({
+        filters: [{ namePrefix: 'Bosch' }, { namePrefix: 'GLM' }, { namePrefix: 'PLR' }],
+        optionalServices: [SVC] });
+    }
     log('Gekozen: ' + (device.name || '(geen naam)') + ' ' + (device.id || ''));
     device.addEventListener('gattserverdisconnected', onDisconnected);
     await openGatt();
   } catch (e) {
-    log('Fout: ' + e.name + ': ' + e.message);
-    setStatus(e.name === 'NotFoundError' ? 'Geannuleerd' : 'Verbinden mislukt', '');
-    if (e.name !== 'NotFoundError') toast('Verbinden mislukt – zie debug-log');
+    log('Fout: ' + errText(e));
+    const cancelled = e && e.name === 'NotFoundError';
+    setStatus(cancelled ? 'Geannuleerd / niets gevonden' : 'Verbinden mislukt', '');
+    if (!cancelled) toast('Verbinden mislukt – zie debug-log');
   }
 }
 
@@ -342,7 +364,10 @@ $('btnCopyLog').onclick = () => copyText($('log').textContent, 'Log');
 if (!navigator.bluetooth) { $('noBle').hidden = false; $('btnConnect').disabled = true; $('btnAny').disabled = true; }
 if (items.length) $('last').textContent = fmt(items[0].m);
 render();
-log('Klaar. Web Bluetooth: ' + (navigator.bluetooth ? 'ja' : 'nee'));
+log('Klaar. Web Bluetooth: ' + (navigator.bluetooth ? 'ja' : 'nee') + ' | versie 2 | ' + navigator.userAgent);
+if (navigator.bluetooth && navigator.bluetooth.getAvailability) {
+  navigator.bluetooth.getAvailability().then(a => log('Bluetooth beschikbaar: ' + a)).catch(e => log('getAvailability: ' + errText(e)));
+}
 </script>
 </body>
 </html>
