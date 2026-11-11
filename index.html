@@ -127,6 +127,7 @@ const CHR  = '02a6c0d1-0451-4000-b000-fb3210111989';
 const CMD_AUTOSYNC = [0xC0, 0x55, 0x02, 0x01, 0x00, 0x1A]; // meter stuurt elke meting door
 const CMD_MEASURE  = [0xC0, 0x56, 0x01, 0x00, 0x1E];       // 1e keer: laser aan, 2e keer: meten
 const STORE = 'lasermeter.metingen.v1';
+const EXTRA_SVCS = [0xfde8, 0x180a, 0x180f, 0xfe59];
 
 const $ = id => document.getElementById(id);
 let device = null, chr = null, manualClose = false;
@@ -211,9 +212,9 @@ async function connect(acceptAll) {
   if (!navigator.bluetooth) { $('noBle').hidden = false; return; }
   try {
     const opts = acceptAll
-      ? { acceptAllDevices: true, optionalServices: [SVC] }
-      : { filters: [{ services: [SVC] }, { namePrefix: 'PLR' }, { namePrefix: 'GLM' }, { namePrefix: 'Bosch' }],
-          optionalServices: [SVC] };
+      ? { acceptAllDevices: true, optionalServices: [SVC, ...EXTRA_SVCS] }
+      : { filters: [{ services: [SVC] }, { namePrefix: 'PLR' }, { namePrefix: 'GLM' }, { namePrefix: 'Bosch' }, { namePrefix: 'AD' }],
+          optionalServices: [SVC, ...EXTRA_SVCS] };
     setStatus('Apparaat kiezen…', 'busy');
     log('Zoeken: ' + (acceptAll ? 'alle apparaten' : 'Bosch-filter'));
     try {
@@ -223,8 +224,8 @@ async function connect(acceptAll) {
       if (acceptAll) throw e1;
       log('Opnieuw met eenvoudiger filter (alleen naam)…');
       device = await navigator.bluetooth.requestDevice({
-        filters: [{ namePrefix: 'Bosch' }, { namePrefix: 'GLM' }, { namePrefix: 'PLR' }],
-        optionalServices: [SVC] });
+        filters: [{ namePrefix: 'Bosch' }, { namePrefix: 'GLM' }, { namePrefix: 'PLR' }, { namePrefix: 'AD' }],
+        optionalServices: [SVC, ...EXTRA_SVCS] });
     }
     log('Gekozen: ' + (device.name || '(geen naam)') + ' ' + (device.id || ''));
     device.addEventListener('gattserverdisconnected', onDisconnected);
@@ -246,11 +247,8 @@ async function openGatt() {
     svc = await server.getPrimaryService(SVC);
   } catch (e) {
     log('Bosch-service niet gevonden: ' + e.message);
-    try {
-      const all = await server.getPrimaryServices();
-      log('Beschikbare services: ' + all.map(s => s.uuid).join(', '));
-    } catch (e2) { log('Kon services niet oplijsten: ' + e2.message); }
-    throw new Error('Deze meter gebruikt een ander protocol');
+    await explore(server);
+    return;
   }
   chr = await svc.getCharacteristic(CHR);
   const p = chr.properties || {};
@@ -262,6 +260,62 @@ async function openGatt() {
   manualClose = false;
   setStatus('Verbonden met ' + (device.name || 'meter'), 'on');
   toast('Verbonden');
+}
+
+
+// ---------- verkenningsmodus (onbekend protocol, bv. AdvancedDistance 50C) ----------
+const ascii = dv => Array.from(new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength))
+  .map(b => b >= 32 && b < 127 ? String.fromCharCode(b) : '.').join('');
+function candidates(dv) {
+  const out = [];
+  for (let i = 0; i + 4 <= dv.byteLength; i++) {
+    const le = dv.getFloat32(i, true), be = dv.getFloat32(i, false);
+    if (le > 0.04 && le < 60) out.push('f32LE@' + i + '=' + le.toFixed(4));
+    if (be > 0.04 && be < 60) out.push('f32BE@' + i + '=' + be.toFixed(4));
+    const u32 = dv.getUint32(i, true);
+    if (u32 >= 40 && u32 <= 60000) out.push('u32LE@' + i + '=' + u32);
+  }
+  for (let i = 0; i + 2 <= dv.byteLength; i++) {
+    const u16 = dv.getUint16(i, true);
+    if (u16 >= 40 && u16 <= 60000) out.push('u16LE@' + i + '=' + u16);
+  }
+  return out;
+}
+const exploreChars = [];
+async function explore(server) {
+  log('== VERKENNINGSMODUS ==');
+  let svcs = [];
+  try { svcs = await server.getPrimaryServices(); } catch (e) { log('Services oplijsten mislukt: ' + errText(e)); }
+  log('Services: ' + svcs.map(s => s.uuid).join(', '));
+  for (const svc of svcs) {
+    let chars = [];
+    try { chars = await svc.getCharacteristics(); } catch (e) { log(' ' + svc.uuid + ': kenmerken mislukt: ' + errText(e)); continue; }
+    for (const c of chars) {
+      const p = c.properties || {};
+      const props = ['read','write','writeWithoutResponse','notify','indicate'].filter(k => p[k]).join(',');
+      log(' ' + svc.uuid.slice(4, 8) + ' / ' + c.uuid + ' [' + props + ']');
+      if (p.read) {
+        try { const v = await c.readValue(); log('   lees: ' + hex(v) + '  "' + ascii(v) + '"'); }
+        catch (e) { log('   lezen mislukt: ' + errText(e)); }
+      }
+      if (p.notify || p.indicate) {
+        c.addEventListener('characteristicvaluechanged', ev => {
+          const v = ev.target.value;
+          log('← ' + c.uuid.slice(0, 8) + ': ' + hex(v));
+          const cand = candidates(v);
+          if (cand.length) log('   kandidaten: ' + cand.slice(0, 12).join(' '));
+        });
+        try { await c.startNotifications(); log('   luisteren: aan'); }
+        catch (e) { log('   luisteren mislukt: ' + errText(e)); }
+      }
+      exploreChars.push(c);
+    }
+  }
+  manualClose = false;
+  setStatus('Verbonden (verkenningsmodus) – meet nu een paar keer', 'on');
+  $('btnMeasure').disabled = true;
+  toast('Verbonden – meet nu met de meter');
+  log('Meet nu 2–3 keer met de knop op de meter (bv. iets van ongeveer 1 m) en noteer de waarden op het scherm.');
 }
 
 function onDisconnected() {
@@ -364,7 +418,7 @@ $('btnCopyLog').onclick = () => copyText($('log').textContent, 'Log');
 if (!navigator.bluetooth) { $('noBle').hidden = false; $('btnConnect').disabled = true; $('btnAny').disabled = true; }
 if (items.length) $('last').textContent = fmt(items[0].m);
 render();
-log('Klaar. Web Bluetooth: ' + (navigator.bluetooth ? 'ja' : 'nee') + ' | versie 2 | ' + navigator.userAgent);
+log('Klaar. Web Bluetooth: ' + (navigator.bluetooth ? 'ja' : 'nee') + ' | versie 3 | ' + navigator.userAgent);
 if (navigator.bluetooth && navigator.bluetooth.getAvailability) {
   navigator.bluetooth.getAvailability().then(a => log('Bluetooth beschikbaar: ' + a)).catch(e => log('getAvailability: ' + errText(e)));
 }
