@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b7a3e">
+<title>Lasermeter – plannen</title>
+<style>
+  :root {
+    --bg: #f3f4f1; --card: #fff; --ink: #1c211e; --muted: #69716c; --line: #e1e4df;
+    --green: #0b7a3e; --green-soft: #e2f0e7; --accent: #e8590c; --accent-soft: #fdeadf;
+    --red: #b3261e; --warn-bg: #fff4d6; --warn-ink: #5c4400;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111412; --card: #1b1f1c; --ink: #edf0ed; --muted: #9aa39d; --line: #2b312d;
+            --green: #3fbf74; --green-soft: #1c3325; --accent: #ff8a4c; --accent-soft: #3a2316;
+            --warn-bg: #33290d; --warn-ink: #f3dd9a; }
+  }
+  [hidden] { display: none !important; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body { font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  input { font: inherit; }
+
+  /* topbalk */
+  .top { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 92%, transparent);
+         backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+         padding: max(10px, env(safe-area-inset-top)) 12px 8px; display: flex; align-items: center; gap: 8px;
+         border-bottom: 1px solid var(--line); }
+  .back { border: 0; background: none; font-size: 26px; line-height: 1; padding: 2px 8px 4px 2px; color: var(--green); }
+  .title { flex: 1; min-width: 0; font-weight: 700; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pill { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--card);
+          border-radius: 999px; padding: 6px 10px; font-size: 13px; font-weight: 600; max-width: 55%; }
+  .pill span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #aaa; flex: none; }
+  .dot.on { background: var(--green); } .dot.busy { background: #e0a800; }
+
+  main { max-width: 640px; margin: 0 auto; padding: 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px; margin-bottom: 12px; }
+  h2 { font-size: 15px; margin: 0 0 8px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .muted { color: var(--muted); font-size: 14px; }
+  .btn { border: 0; border-radius: 10px; padding: 11px 14px; font-weight: 600; background: var(--green); color: #fff; }
+  .btn.soft { background: var(--green-soft); color: var(--green); }
+  .btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  .btn.danger { background: transparent; color: var(--red); border: 1px solid var(--line); }
+  .btn.small { padding: 7px 10px; font-size: 14px; }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btns > .btn { flex: 1 1 auto; }
+
+  /* lijsten */
+  .list { margin: 0; padding: 0; list-style: none; }
+  .item { display: flex; align-items: center; gap: 10px; padding: 10px 2px; border-top: 1px solid var(--line); }
+  .item:first-child { border-top: 0; }
+  .item .grow { flex: 1; min-width: 0; }
+  .item .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .sub { font-size: 13px; color: var(--muted); }
+  .chev { color: var(--muted); font-size: 20px; }
+  .thumb { width: 64px; height: 48px; flex: none; background: #fff; border-radius: 8px; border: 1px solid var(--line); }
+
+  /* maatregels */
+  .mrow { display: flex; align-items: center; gap: 8px; padding: 8px 6px; border-radius: 10px; margin: 2px -6px; }
+  .mrow.sel { background: var(--green-soft); }
+  .mrow.target { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
+  .mrow .lbl { flex: 1; min-width: 0; }
+  .mrow .val { font-variant-numeric: tabular-nums; font-weight: 700; border: 1px solid var(--line); background: var(--bg);
+               border-radius: 8px; padding: 6px 10px; min-width: 96px; text-align: right; }
+  .mrow .val.calc { font-weight: 500; color: var(--muted); font-style: italic; }
+  .aim { border: 0; background: none; width: 36px; height: 36px; border-radius: 50%; font-size: 18px; color: var(--muted); flex: none; }
+  .mrow.target .aim { color: #fff; background: var(--accent); }
+
+  .banner { position: sticky; top: 58px; z-index: 15; display: flex; align-items: center; gap: 8px;
+            background: var(--accent); color: #fff; border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; font-weight: 600; }
+  .banner.idle { background: var(--card); color: var(--muted); border: 1px dashed var(--line); font-weight: 500; font-size: 14px; }
+  .banner .grow { flex: 1; min-width: 0; }
+  .banner button { border: 0; background: rgba(255,255,255,.22); color: #fff; border-radius: 8px; padding: 6px 10px; font-weight: 700; }
+
+  .tabs { display: flex; background: var(--line); border-radius: 10px; padding: 3px; margin-bottom: 12px; }
+  .tabs button { flex: 1; border: 0; background: none; padding: 8px; border-radius: 8px; font-weight: 600; color: var(--muted); }
+  .tabs button.on { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+
+  .drawing { background: #fff; border-radius: 12px; border: 1px solid var(--line); overflow: hidden; margin-bottom: 10px; touch-action: manipulation; }
+  .drawing svg { display: block; width: 100%; height: auto; max-height: 62vh; }
+  .stats { display: flex; gap: 6px; flex-wrap: wrap; font-size: 13px; }
+  .stats span { background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; }
+  .warn { background: var(--warn-bg); color: var(--warn-ink); border-radius: 10px; padding: 8px 10px; font-size: 14px; margin-top: 8px; }
+
+  .seg { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+  .seg button { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 7px 10px; font-weight: 600; font-size: 14px; }
+  .seg button.on { background: var(--green); color: #fff; border-color: var(--green); }
+
+  .wallnav { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .wallnav .grow { flex: 1; text-align: center; font-weight: 700; }
+  .wallnav button { border: 1px solid var(--line); background: var(--card); border-radius: 10px; width: 44px; height: 40px; font-size: 18px; }
+  .ocard { border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; margin-bottom: 10px; }
+  .ocard.sel { border-color: var(--green); box-shadow: 0 0 0 1px var(--green); }
+  .ohead { display: flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 2px; }
+  .ohead .grow { flex: 1; }
+
+  /* sheet / overlay */
+  .veil { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
+  .sheet { background: var(--card); width: 100%; max-width: 640px; border-radius: 16px 16px 0 0; padding: 16px 16px max(16px, env(safe-area-inset-bottom));
+           max-height: 88vh; overflow: auto; }
+  .sheet h3 { margin: 0 0 12px; font-size: 18px; }
+  .sheet input[type=text] { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font-size: 20px; }
+  .sheet img { width: 100%; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+  pre.log { font: 11px/1.35 ui-monospace, Menlo, monospace; white-space: pre-wrap; word-break: break-all; max-height: 34vh; overflow: auto;
+            background: var(--bg); padding: 8px; border-radius: 8px; }
+  .toast { position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 60;
+           background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 20px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90vw; }
+  .toast.show { opacity: 1; }
+  .empty { text-align: center; padding: 24px 8px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header class="top">
+  <button class="back" id="back" hidden aria-label="Terug">‹</button>
+  <div class="title" id="title">Lasermeter</div>
+  <button class="pill" id="pill"><span class="dot" id="dot"></span><span id="pillText">Verbind meter</span></button>
+</header>
+<main id="app"></main>
+<div id="veil" class="veil" hidden><div class="sheet" id="sheet"></div></div>
+<div id="toast" class="toast"></div>
+<input type="file" id="fileIn" accept=".json,application/json" hidden>
+<script src="geo.js?v=6"></script>
+<script src="app.js?v=6"></script>
+</body>
+</html>
