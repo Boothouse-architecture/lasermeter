@@ -86,7 +86,7 @@
     <div class="row">
       <button id="btnMeasure" class="secondary" disabled>Meet vanop telefoon</button>
     </div>
-    <div class="row" style="margin-top:6px">
+    <div class="row" style="margin-top:6px" hidden>
       <button id="btnAny" class="ghost" style="font-size:13px;padding:8px">Meter niet gevonden? Toon alle apparaten</button>
     </div>
   </div>
@@ -127,7 +127,7 @@ const CHR  = '02a6c0d1-0451-4000-b000-fb3210111989';
 const CMD_AUTOSYNC = [0xC0, 0x55, 0x02, 0x01, 0x00, 0x1A]; // meter stuurt elke meting door
 const CMD_MEASURE  = [0xC0, 0x56, 0x01, 0x00, 0x1E];       // 1e keer: laser aan, 2e keer: meten
 const STORE = 'lasermeter.metingen.v1';
-const EXTRA_SVCS = [0xfde8, 0x180a, 0x180f, 0xfe59];
+const EXTRA_SVCS = ['0000fde8-0000-1000-8000-00805f9b34fb', '0000180a-0000-1000-8000-00805f9b34fb'];
 
 const $ = id => document.getElementById(id);
 let device = null, chr = null, manualClose = false;
@@ -208,25 +208,31 @@ function onNotify(ev) {
 }
 
 // ---------- verbinden ----------
-async function connect(acceptAll) {
+async function connect() {
+  device = null;
   if (!navigator.bluetooth) { $('noBle').hidden = false; return; }
   try {
-    const opts = acceptAll
-      ? { acceptAllDevices: true, optionalServices: [SVC, ...EXTRA_SVCS] }
-      : { filters: [{ services: [SVC] }, { namePrefix: 'PLR' }, { namePrefix: 'GLM' }, { namePrefix: 'Bosch' }, { namePrefix: 'AD' }],
-          optionalServices: [SVC, ...EXTRA_SVCS] };
     setStatus('Apparaat kiezen…', 'busy');
-    log('Zoeken: ' + (acceptAll ? 'alle apparaten' : 'Bosch-filter'));
-    try {
-      device = await navigator.bluetooth.requestDevice(opts);
-    } catch (e1) {
-      log('Zoeken mislukt: ' + errText(e1));
-      if (acceptAll) throw e1;
-      log('Opnieuw met eenvoudiger filter (alleen naam)…');
-      device = await navigator.bluetooth.requestDevice({
-        filters: [{ namePrefix: 'Bosch' }, { namePrefix: 'GLM' }, { namePrefix: 'PLR' }, { namePrefix: 'AD' }],
-        optionalServices: [SVC, ...EXTRA_SVCS] });
+    // Bluefy weigert filters (fout 2), dus altijd alle apparaten tonen.
+    // Eerst met extra services, bij weigering zonder.
+    const tries = [
+      { acceptAllDevices: true, optionalServices: [SVC, ...EXTRA_SVCS] },
+      { acceptAllDevices: true, optionalServices: [SVC] },
+      { acceptAllDevices: true },
+    ];
+    let lastErr;
+    for (let i = 0; i < tries.length && !device; i++) {
+      const t0 = Date.now();
+      log('Zoeken (poging ' + (i + 1) + ')…');
+      try { device = await navigator.bluetooth.requestDevice(tries[i]); }
+      catch (e1) {
+        lastErr = e1;
+        const ms = Date.now() - t0;
+        log('Zoeken mislukt na ' + ms + ' ms: ' + errText(e1));
+        if (ms > 1500) throw e1; // gebruiker heeft de lijst gesloten: niet opnieuw vragen
+      }
     }
+    if (!device) throw lastErr;
     log('Gekozen: ' + (device.name || '(geen naam)') + ' ' + (device.id || ''));
     device.addEventListener('gattserverdisconnected', onDisconnected);
     await openGatt();
@@ -418,7 +424,7 @@ $('btnCopyLog').onclick = () => copyText($('log').textContent, 'Log');
 if (!navigator.bluetooth) { $('noBle').hidden = false; $('btnConnect').disabled = true; $('btnAny').disabled = true; }
 if (items.length) $('last').textContent = fmt(items[0].m);
 render();
-log('Klaar. Web Bluetooth: ' + (navigator.bluetooth ? 'ja' : 'nee') + ' | versie 3 | ' + navigator.userAgent);
+log('Klaar. Web Bluetooth: ' + (navigator.bluetooth ? 'ja' : 'nee') + ' | versie 4 | ' + navigator.userAgent);
 if (navigator.bluetooth && navigator.bluetooth.getAvailability) {
   navigator.bluetooth.getAvailability().then(a => log('Bluetooth beschikbaar: ' + a)).catch(e => log('getAvailability: ' + errText(e)));
 }
