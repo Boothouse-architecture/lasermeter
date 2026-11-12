@@ -1,0 +1,71 @@
+name: iOS-app bouwen
+
+on:
+  push:
+    branches: [main]
+    paths: ['ios/**', 'index.html', 'app.js', 'geo.js', '.github/workflows/ios.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Web-app in de iOS-app stoppen
+        run: |
+          mkdir -p ios/web
+          cp index.html app.js geo.js ios/web/
+          sed -i '' -E 's/\?v=[0-9]+//g' ios/web/index.html
+
+      - name: Xcode-project genereren
+        run: |
+          brew install xcodegen
+          cd ios && xcodegen generate
+
+      - name: Bouwen (zonder ondertekening)
+        run: |
+          cd ios
+          xcodebuild -project Lasermeter.xcodeproj -scheme Lasermeter -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build > ../build.log 2>&1 \
+            || { grep -E "error:|fatal error" ../build.log | head -60; tail -40 ../build.log; exit 1; }
+          tail -5 ../build.log
+          test -d build/Build/Products/Release-iphoneos/Lasermeter.app
+
+      - name: IPA maken
+        run: |
+          cd ios
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/Lasermeter.app Payload/
+          zip -qry Lasermeter.ipa Payload
+          ls -lh Lasermeter.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Lasermeter-ipa
+          path: ios/Lasermeter.ipa
+
+      - name: Downloadlink bijwerken (release ios-latest)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete ios-latest --yes --cleanup-tag || true
+          gh release create ios-latest ios/Lasermeter.ipa \
+            --title "Lasermeter iOS – laatste build" \
+            --notes "Automatisch gebouwd uit ${GITHUB_SHA::7}. Installeer met AltStore of Sideloadly (gratis Apple-account)."
+
+      - name: Build-log bewaren (branch ios-build-log)
+        if: always()
+        run: |
+          touch build.log
+          { echo "commit: ${GITHUB_SHA}"; echo "status: ${{ job.status }}"; echo; grep -E "error:|warning:" build.log | sort -u | head -200; echo; echo "--- staart ---"; tail -80 build.log; } > summary.txt
+          git config user.name "github-actions"; git config user.email "actions@github.com"
+          git checkout --orphan ios-build-log
+          git rm -rfq --cached . >/dev/null
+          git add -f summary.txt
+          git commit -qm "Build-log ${GITHUB_SHA::7}"
+          git push -f origin ios-build-log

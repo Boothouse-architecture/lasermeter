@@ -1,0 +1,6 @@
+ios/web/
+ios/*.xcodeproj/
+ios/build/
+ios/Payload/
+ios/*.ipa
+ios/Support/Info.plist

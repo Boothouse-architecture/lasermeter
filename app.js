@@ -1,6 +1,10 @@
 'use strict';
 /* Lasermeter – plannen & aanzichten met een Bosch-lasermeter via Web Bluetooth (Bluefy op iPhone). */
-const VERSION = 7;
+const VERSION = 8;
+// Draait de app in de native iOS-schil? Dan lopen Bluetooth, delen, opslag en LiDAR via Swift.
+const NATIVE = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lasermeter;
+const NATIVE_CAPS = window.__lasermeterNative || {};
+const nat = (cmd, data = {}) => { try { NATIVE.postMessage({ cmd, ...data }); } catch (e) { console.warn(e); } };
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const nl = (v, d = 3) => (v == null || !isFinite(v) ? '–' : v.toFixed(d).replace('.', ','));
@@ -24,6 +28,13 @@ if (!['projects', 'project', 'room', 'loose'].includes(S.view)) S.view = 'projec
 
 function save() {
   store(KEY_P, S.projects); store(KEY_M, S.loose);
+  if (NATIVE) { // ook als bestand in de app bewaren (zichtbaar in Bestanden)
+    clearTimeout(save._t);
+    save._t = setTimeout(() => {
+      nat('persist', { key: KEY_P, value: JSON.stringify(S.projects) });
+      nat('persist', { key: KEY_M, value: JSON.stringify(S.loose) });
+    }, 400);
+  }
   store(KEY_NAV, { view: S.view, pid: S.pid, rid: S.rid, tab: S.tab });
 }
 const project = () => S.projects.find(p => p.id === S.pid);
@@ -110,6 +121,7 @@ function parseDistance(dv) {
   return null;
 }
 async function bleWrite(bytes) {
+  if (NATIVE) { nat('write', { hex: bytes.map(b => b.toString(16).padStart(2, '0')).join('') }); return; }
   const c = BLE.chr; if (!c) throw new Error('niet verbonden');
   const data = new Uint8Array(bytes); blog('→ ' + hex(new DataView(data.buffer)));
   const p = c.properties || {};
@@ -123,6 +135,7 @@ async function bleWrite(bytes) {
 }
 
 async function bleConnect() {
+  if (NATIVE) { setBle('busy', 'Zoeken…'); nat('connect'); return; }
   if (!navigator.bluetooth) {
     openSheet(`<h3>Geen Bluetooth in deze browser</h3><p>Open deze pagina op je iPhone in de gratis app <b>Bluefy – Web BLE Browser</b>. Op Android of computer: Chrome.</p>
       <div class="btns"><button class="btn" data-sh="cancel">OK</button></div>`, { cancel: closeSheet });
@@ -198,6 +211,37 @@ function bleDisconnected() {
     }, 1500);
   }
 }
+// ---------- callbacks vanuit de native iOS-app ----------
+window.LasermeterNative = {
+  onStatus(state, name) {
+    if (state === 'on') BLE.device = { name, gatt: { connected: true, disconnect() { nat('disconnect'); } } };
+    else if (state === 'off' && BLE.device) BLE.device.gatt.connected = false;
+    setBle(state, state === 'busy' ? (name || 'Bezig…') : undefined);
+    if (state === 'on') toast('Verbonden met ' + (name || 'meter'));
+  },
+  onData(h) {
+    const bytes = new Uint8Array((h.match(/../g) || []).map(x => parseInt(x, 16)));
+    const dv = new DataView(bytes.buffer);
+    blog('← ' + hex(dv));
+    const m = parseDistance(dv);
+    if (m) onMeasurement(m);
+  },
+  onLog(msg) { blog(msg); },
+  onScan(json) {
+    const p = S.projects.find(x => x.id === S.scanPid) || project();
+    if (!p) return toast('Geen project geopend');
+    try {
+      const data = typeof json === 'string' ? JSON.parse(json) : json;
+      const nr = Geo.roomFromScan(data, 'Scan ' + new Date().toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' }));
+      p.rooms.push(nr); p.updated = Date.now();
+      S.pid = p.id; S.rid = nr.id; S.view = 'room'; S.tab = 'plan'; S.sel = null; S.target = { kind: 'wall', i: 0 };
+      render(); window.scrollTo(0, 0);
+      toast('Scan geladen: ' + nr.walls.length + ' muren – controleer ze nu met de laser');
+    } catch (e) { toast('Scan omzetten mislukt: ' + e.message); blog('Scan: ' + errText(e)); }
+  },
+  onScanError(msg) { toast('Scan: ' + msg); },
+};
+
 async function bleMeasure() { try { await bleWrite(CMD_MEASURE); } catch (e) { toast('Meten vanop telefoon mislukt'); } }
 
 function bleSheet() {
@@ -227,7 +271,7 @@ $('pill').onclick = () => (BLE.state === 'on' || BLE.state === 'busy' ? bleSheet
 // ======================================================================
 function onMeasurement(m) {
   BLE.last = m; setBle(BLE.state);
-  if (navigator.vibrate) navigator.vibrate(30);
+  if (NATIVE) nat('haptic'); else if (navigator.vibrate) navigator.vibrate(30);
   const r = room();
   if (S.view === 'room' && r && S.target) { applyValue(r, S.target, m); return; }
   S.loose.unshift({ id: Date.now() + Math.random(), m, label: '', t: new Date().toISOString() });
@@ -510,7 +554,9 @@ function viewProject() {
     ${p.rooms.length ? `<ul class="list">${p.rooms.map(r => `<li class="item" data-act="openRoom" data-id="${r.id}">${thumb(r)}
       <div class="grow"><div class="name">${esc(r.name)}</div><div class="sub">${nl(Geo.area(r), 2)} m² · h ${nl(r.height, 2)} m · ${r.walls.length} muren</div></div>
       <span class="chev">›</span></li>`).join('')}</ul>` : '<div class="empty">Nog geen ruimtes.</div>'}
-    <div class="btns" style="margin-top:8px"><button class="btn" data-act="newRoom">+ Ruimte</button></div></div>
+    <div class="btns" style="margin-top:8px"><button class="btn" data-act="newRoom">+ Ruimte</button>
+    ${NATIVE_CAPS.scan ? '<button class="btn soft" data-act="scan">Scan met LiDAR</button>' : ''}</div>
+    ${NATIVE_CAPS.scan ? '<p class="muted" style="margin-bottom:0">Scan de ruimte, controleer daarna de muren (≈) met de lasermeter.</p>' : ''}</div>
   <div class="card"><h2>Exporteren</h2>
     <div class="btns"><button class="btn soft" data-act="exportPng">Afbeelding</button><button class="btn soft" data-act="exportCsv">CSV</button>
     <button class="btn soft" data-act="exportIfc">IFC</button><button class="btn soft" data-act="exportJson">Project (JSON)</button></div>
@@ -547,6 +593,7 @@ function viewRoom() {
     const a = Geo.area(r);
     html += `<div class="drawing" id="plan">${svgTag(d)}</div>
       <div class="stats"><span>Opp. <b>${nl(a, 2)} m²</b></span><span>Omtrek ${nl(Geo.perimeter(r), 2)} m</span><span>Volume ${nl(a * r.height, 1)} m³</span></div>
+      ${r.scanned && r.walls.some(w => !w.measured) ? '<div class="muted" style="margin-top:6px">Gescand met LiDAR: maten met ≈ zijn schattingen. Tik een muur aan en meet ze met de laser.</div>' : ''}
       ${r.closure > 0.01 ? `<div class="warn">⚠ De maten sluiten niet helemaal (${nl(r.closure * 100, 1)} cm verschil). Controleer de metingen of zet een hoek op “vrij”.</div>` : ''}`;
     html += selPanel(r);
     html += `<div class="card"><h2>Muren</h2>${r.walls.map((w, i) =>
@@ -716,6 +763,7 @@ $('app').addEventListener('click', e => {
     case 'exportIfc': exportFile(fname(p, 'ifc'), 'application/x-step', Geo.ifcExport(p)); break;
     case 'exportJson': exportFile(fname(p, 'json'), 'application/json', JSON.stringify({ app: 'lasermeter', version: 1, project: p }, null, 1)); break;
     case 'exportPng': exportPng(p); break;
+    case 'scan': S.scanPid = p.id; nat('scan'); break;
   }
 });
 
@@ -744,7 +792,9 @@ async function copyText(text, what) {
   }
 }
 
+const b64utf8 = str => { const b = new TextEncoder().encode(str); let s = ''; for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(s); };
 function exportFile(name, mime, content) {
+  if (NATIVE) { nat('share', { name, mime, base64: b64utf8(content) }); return; }
   const blob = new Blob([content], { type: mime });
   const canShare = (() => { try { return navigator.canShare && navigator.canShare({ files: [new File([blob], name, { type: mime })] }); } catch { return false; } })();
   openSheet(`<h3>${esc(name)}</h3><p class="muted">${(blob.size / 1024).toFixed(1)} kB</p>
@@ -807,6 +857,7 @@ async function exportPng(p) {
     const ctx = cv.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
     ctx.drawImage(img, 0, 0, cv.width, cv.height);
     const url = cv.toDataURL('image/png');
+    if (NATIVE) { nat('share', { name: fname(p, 'png'), mime: 'image/png', base64: url.split(',')[1] }); return; }
     const blob = await (await fetch(url)).blob();
     const name = fname(p, 'png');
     const canShare = (() => { try { return navigator.canShare && navigator.canShare({ files: [new File([blob], name, { type: 'image/png' })] }); } catch { return false; } })();

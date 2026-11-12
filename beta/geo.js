@@ -400,7 +400,92 @@ function ifcExport(project, opts = {}) {
   ].join('\n');
 }
 
-const Geo = { uid, TEMPLATES, makeRoom, makeWall, makeCorner, makeOpening, splitWall, removeCorner,
+
+// ---------- LiDAR-scan (Apple RoomPlan) -> ruimte ----------
+// scan = { walls:[{cx,cy,cz,ax,az,w,h}], openings:[{type:'deur'|'raam'|'opening',cx,cy,cz,w,h}] }
+// (ax,az) = richting van de muur in wereldcoördinaten. Plan: X = x, Y = -z (bovenaanzicht).
+function roomFromScan(scan, name) {
+  const segs = (scan.walls || []).filter(w => w.w > 0.15).map(w => {
+    const L = Math.hypot(w.ax, w.az) || 1, d = { x: w.ax / L, y: -w.az / L }, c = { x: w.cx, y: -w.cz }, h2 = w.w / 2;
+    return { a: { x: c.x - d.x * h2, y: c.y - d.y * h2 }, b: { x: c.x + d.x * h2, y: c.y + d.y * h2 }, d, h: w.h, y0: w.cy - w.h / 2 };
+  });
+  if (segs.length < 3) throw new Error('te weinig muren gescand (' + segs.length + ')');
+  const dist = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
+  // muren aan elkaar rijgen op dichtstbijzijnde uiteinden
+  const used = new Set([0]), chain = [segs[0]];
+  let end = segs[0].b;
+  while (used.size < segs.length) {
+    let best = -1, bd = Infinity, flip = false;
+    segs.forEach((s, k) => {
+      if (used.has(k)) return;
+      const da = dist(end, s.a), db = dist(end, s.b);
+      if (da < bd) { bd = da; best = k; flip = false; }
+      if (db < bd) { bd = db; best = k; flip = true; }
+    });
+    if (best < 0 || bd > 1.2) break;
+    const s = segs[best]; used.add(best);
+    const o = flip ? { a: s.b, b: s.a, d: { x: -s.d.x, y: -s.d.y }, h: s.h, y0: s.y0 } : s;
+    chain.push(o); end = o.b;
+  }
+  const n0 = chain.length;
+  if (n0 < 3) throw new Error('muren vormen geen gesloten ruimte');
+  // hoekpunten = snijpunt van opeenvolgende muurlijnen
+  let pts = chain.map((s, k) => {
+    const p = chain[(k - 1 + n0) % n0];
+    const den = p.d.x * s.d.y - p.d.y * s.d.x;
+    if (Math.abs(den) < 0.05) return { x: (p.b.x + s.a.x) / 2, y: (p.b.y + s.a.y) / 2 };
+    const t = ((s.a.x - p.a.x) * s.d.y - (s.a.y - p.a.y) * s.d.x) / den;
+    return { x: p.a.x + p.d.x * t, y: p.a.y + p.d.y * t };
+  });
+  // met de klok mee (binnenkant rechts)
+  let sa = 0;
+  for (let k = 0; k < pts.length; k++) { const a = pts[k], b = pts[(k + 1) % pts.length]; sa += a.x * b.y - b.x * a.y; }
+  if (sa > 0) pts.reverse();
+  // rechte hoeken van ~180° (muur in twee stukken gescand) samenvoegen
+  for (let guard = 0; guard < 50 && pts.length > 3; guard++) {
+    const ang = anglesFromPts(pts), k = ang.findIndex(a => Math.abs(a - 180) < 6);
+    if (k < 0) break;
+    pts.splice(k, 1);
+  }
+  const n = pts.length, ang = anglesFromPts(pts);
+  const hs = chain.map(s => s.h).sort((a, b) => a - b);
+  const height = hs[Math.floor(hs.length / 2)];
+  const floorY = Math.min(...chain.map(s => s.y0));
+  const room = {
+    id: uid(), name: name || 'Scan', height: Math.round(height * 1000) / 1000, heightMeasured: false, thick: 0.1, scanned: true,
+    walls: pts.map((p, k) => makeWall(dist(p, pts[(k + 1) % n]))),
+    corners: ang.map(a => {
+      if (Math.abs(a - 90) < 4) return makeCorner(90, 'aanname');
+      if (Math.abs(a - 270) < 4) return makeCorner(270, 'aanname');
+      return makeCorner(a, 'aanname'); // gescande hoek als (zachte) aanname
+    }),
+  };
+  // ramen & deuren op de dichtstbijzijnde muur
+  for (const o of scan.openings || []) {
+    const c = { x: o.cx, y: -o.cz };
+    let bestK = -1, bestD = Infinity, bestT = 0;
+    for (let k = 0; k < n; k++) {
+      const a = pts[k], b = pts[(k + 1) % n], L = dist(a, b);
+      const ux = (b.x - a.x) / L, uy = (b.y - a.y) / L;
+      const t = Math.max(0, Math.min(L, (c.x - a.x) * ux + (c.y - a.y) * uy));
+      const dd = Math.hypot(a.x + ux * t - c.x, a.y + uy * t - c.y);
+      if (dd < bestD) { bestD = dd; bestK = k; bestT = t; }
+    }
+    if (bestK < 0 || bestD > 0.6) continue;
+    const w = room.walls[bestK], type = o.type === 'raam' ? 'raam' : 'deur';
+    const op = makeOpening(type, w.len);
+    op.width = Math.min(o.w, w.len);
+    op.height = o.h;
+    op.offset = Math.max(0, Math.min(w.len - op.width, bestT - op.width / 2));
+    op.sill = type === 'raam' ? Math.max(0, o.cy - o.h / 2 - floorY) : 0;
+    if (o.type === 'opening') op.passage = true;
+    w.openings.push(op);
+  }
+  solveRoom(room);
+  return room;
+}
+
+const Geo = { roomFromScan, uid, TEMPLATES, makeRoom, makeWall, makeCorner, makeOpening, splitWall, removeCorner,
   solveRoom, geometry, area, perimeter, wallNetArea, csvExport, ifcExport, ifcGuid };
 if (typeof module !== 'undefined' && module.exports) module.exports = Geo;
 else root.Geo = Geo;
