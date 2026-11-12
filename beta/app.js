@@ -1,6 +1,6 @@
 'use strict';
 /* Lasermeter – plannen & aanzichten met een Bosch-lasermeter via Web Bluetooth (Bluefy op iPhone). */
-const VERSION = 6;
+const VERSION = 7;
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const nl = (v, d = 3) => (v == null || !isFinite(v) ? '–' : v.toFixed(d).replace('.', ','));
@@ -574,7 +574,8 @@ function selPanel(r) {
         <button class="${c.mode === 'ingegeven' ? 'on' : ''}" data-act="cornerCustom">${c.mode === 'ingegeven' ? nl(c.angle, 1) + '°' : 'Andere hoek…'}</button>
         <button class="${c.mode === 'vrij' ? 'on' : ''}" data-act="corner" data-mode="vrij">Vrij (berekenen)</button>
       </div>
-      <p class="muted">90°/270° = haaks verondersteld. “Vrij” laat de app de hoek uit de muurlengtes afleiden.</p>
+      <p class="muted">90°/270° = haaks verondersteld. “Vrij” laat de app de hoek uit de muurlengtes afleiden.
+      ${c.mode === 'ingegeven' && !r.corners.some((x, k) => k !== i && x.mode === 'vrij') ? '<br><b>Tip:</b> zet ook een andere hoek op “vrij” (bv. aan het andere eind van de schuine muur), anders verdeelt de app het verschil over alle hoeken.' : ''}</p>
       <div class="btns"><button class="btn ghost small" data-act="removeCorner" ${n <= 3 ? 'disabled' : ''}>Hoek verwijderen</button>
       <button class="btn ghost small" data-act="deselect">Sluiten</button></div></div>`;
   }
@@ -582,8 +583,10 @@ function selPanel(r) {
     const i = S.sel.i, w = r.walls[i];
     return `<div class="card"><h2>Muur ${i + 1} · ${nl(w.len)} m</h2>
       <div class="btns"><button class="btn soft" data-act="addOpen" data-type="raam">+ Raam</button><button class="btn soft" data-act="addOpen" data-type="deur">+ Deur</button>
-      <button class="btn ghost" data-act="split">Hoek toevoegen</button><button class="btn ghost" data-act="toElev">Aanzicht ›</button></div>
-      <p class="muted" style="margin-bottom:0">“Hoek toevoegen” splitst de muur in twee; tik daarna de nieuwe hoek aan om hem te draaien.</p></div>`;
+      <button class="btn ghost" data-act="split">Hoek toevoegen</button>
+      <button class="btn ${r.corners[i].mode === 'vrij' && r.corners[(i + 1) % n].mode === 'vrij' ? 'soft' : 'ghost'}" data-act="oblique">Schuine muur</button>
+      <button class="btn ghost" data-act="toElev">Aanzicht ›</button></div>
+      <p class="muted" style="margin-bottom:0">“Schuine muur” maakt de hoeken aan beide uiteinden vrij: meet dan deze muur en de muren ernaast, en de hoeken volgen vanzelf. “Hoek toevoegen” splitst de muur in twee.</p></div>`;
   }
   return `<p class="muted">Tik een muur aan om te meten, of een hoek (●) om de hoek aan te passen.</p>`;
 }
@@ -677,6 +680,15 @@ $('app').addEventListener('click', e => {
     }
     case 'removeCorner': if (Geo.removeCorner(r, S.sel.i)) { S.sel = null; S.target = null; Geo.solveRoom(r); touch(); render(); } break;
     case 'split': Geo.splitWall(r, S.sel.i); S.sel = { type: 'corner', i: S.sel.i + 1 }; S.target = null; Geo.solveRoom(r); touch(); render(); toast('Hoek ' + LETTER(S.sel.i) + ' toegevoegd'); break;
+    case 'oblique': {
+      const i = S.sel.i, n = r.walls.length, a = r.corners[i], b = r.corners[(i + 1) % n];
+      const on = a.mode === 'vrij' && b.mode === 'vrij';
+      for (const c of [a, b]) {
+        if (on) { const v = c.cur ?? c.angle; c.mode = 'aanname'; c.angle = Math.abs(v - 270) < Math.abs(v - 90) ? 270 : 90; }
+        else c.mode = 'vrij';
+      }
+      Geo.solveRoom(r); touch(); render(); toast(on ? 'Hoeken terug haaks' : 'Hoeken ' + LETTER(i) + ' en ' + LETTER((i + 1) % n) + ' zijn nu vrij'); break;
+    }
     case 'toElev': S.tab = 'aanzicht'; S.wallIdx = S.sel.i; render(); window.scrollTo(0, 0); break;
     case 'wallPrev': S.wallIdx = (S.wallIdx - 1 + r.walls.length) % r.walls.length; S.openSel = null; render(); break;
     case 'wallNext': S.wallIdx = (S.wallIdx + 1) % r.walls.length; S.openSel = null; render(); break;
@@ -767,12 +779,14 @@ function sheetSVG(p) {
     parts.push(`<svg x="${pad + (pw - pw2) / 2}" y="${y}" width="${pw2}" height="${ph}" viewBox="${d.vb}">${d.body}</svg>`); y += ph + 16;
     const cw = (W - 2 * pad - 20) / 2;
     let rowH = 0;
+    const elevs = r.walls.map((w, i) => elevSVG(r, i, { export: true }));
+    const k = cw / Math.max(...elevs.map(e => e.w)); // zelfde schaal voor alle aanzichten
     r.walls.forEach((w, i) => {
-      const e = elevSVG(r, i, { export: true }), eh = cw * e.h / e.w;
+      const e = elevs[i], ew = e.w * k, eh = e.h * k;
       const col = i % 2, x = pad + col * (cw + 20);
       if (col === 0 && i > 0) { y += rowH; rowH = 0; }
       parts.push(`<text x="${x}" y="${y + 14}" font-size="16" font-family="-apple-system, Helvetica, Arial, sans-serif" font-weight="700" fill="#1c211e">Aanzicht muur ${i + 1}</text>`);
-      parts.push(`<svg x="${x}" y="${y + 20}" width="${cw}" height="${eh}" viewBox="${e.vb}">${e.body}</svg>`);
+      parts.push(`<svg x="${x}" y="${y + 20}" width="${ew}" height="${eh}" viewBox="${e.vb}">${e.body}</svg>`);
       rowH = Math.max(rowH, eh + 30);
     });
     y += rowH + 10;

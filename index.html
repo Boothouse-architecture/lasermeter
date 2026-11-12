@@ -4,449 +4,127 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Lasermeter – Bosch GLM 50 C</title>
+<meta name="theme-color" content="#0b7a3e">
+<title>Lasermeter – plannen</title>
 <style>
   :root {
-    --bg: #f4f5f2; --card: #ffffff; --ink: #1d2320; --muted: #6b736e;
-    --green: #0b7a3e; --green-soft: #e3f1e8; --red: #b3261e; --line: #e2e5e0;
+    --bg: #f3f4f1; --card: #fff; --ink: #1c211e; --muted: #69716c; --line: #e1e4df;
+    --green: #0b7a3e; --green-soft: #e2f0e7; --accent: #e8590c; --accent-soft: #fdeadf;
+    --red: #b3261e; --warn-bg: #fff4d6; --warn-ink: #5c4400;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #121513; --card: #1c201d; --ink: #eef1ee; --muted: #9aa39d;
-            --green: #3fbf74; --green-soft: #1d3326; --red: #ff6b5e; --line: #2c322e; }
+    :root { --bg: #111412; --card: #1b1f1c; --ink: #edf0ed; --muted: #9aa39d; --line: #2b312d;
+            --green: #3fbf74; --green-soft: #1c3325; --accent: #ff8a4c; --accent-soft: #3a2316;
+            --warn-bg: #33290d; --warn-ink: #f3dd9a; }
   }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--ink);
-    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
-  }
-  main { max-width: 560px; margin: 0 auto; }
-  h1 { font-size: 20px; margin: 4px 0 12px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
-  .status { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
-  .dot { width: 10px; height: 10px; border-radius: 50%; background: #aaa; flex: none; }
-  .dot.on { background: var(--green); }
-  .dot.busy { background: #e0a800; }
-  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-  button {
-    font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 12px 14px;
-    background: var(--green); color: #fff; flex: 1 1 auto; cursor: pointer;
-  }
-  button.secondary { background: var(--green-soft); color: var(--green); }
-  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
-  button:disabled { opacity: .45; }
-  .big { font-size: 44px; font-weight: 700; letter-spacing: -1px; text-align: center; margin: 4px 0 0; font-variant-numeric: tabular-nums; }
-  .sub { text-align: center; color: var(--muted); font-size: 13px; }
-  input[type=text] {
-    font: inherit; width: 100%; padding: 10px 12px; border-radius: 10px;
-    border: 1px solid var(--line); background: var(--bg); color: var(--ink);
-  }
-  ul { list-style: none; margin: 0; padding: 0; }
-  li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
-  li:first-child { border-top: 0; }
-  .val { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 84px; }
-  .meta { flex: 1; min-width: 0; }
-  .meta .lbl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .meta .time { font-size: 12px; color: var(--muted); }
-  .x { flex: none; background: none; color: var(--muted); padding: 6px 8px; font-size: 18px; }
-  .head { display: flex; justify-content: space-between; align-items: baseline; }
-  .head h2 { font-size: 16px; margin: 0; }
-  .head span { font-size: 13px; color: var(--muted); }
-  .empty { color: var(--muted); font-size: 14px; padding: 6px 0; }
-  details summary { cursor: pointer; font-weight: 600; font-size: 14px; }
-  pre {
-    font: 11px/1.35 ui-monospace, Menlo, monospace; white-space: pre-wrap; word-break: break-all;
-    max-height: 240px; overflow: auto; background: var(--bg); padding: 8px; border-radius: 8px; margin: 8px 0 0;
-  }
-  .warn { background: #fff4d6; color: #5c4400; border-color: #f0dc9c; font-size: 14px; }
-  @media (prefers-color-scheme: dark) { .warn { background: #33290d; color: #f3dd9a; border-color: #5a4a17; } }
-  .toast {
-    position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom)); transform: translateX(-50%);
-    background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 20px; font-size: 14px;
-    opacity: 0; transition: opacity .2s; pointer-events: none;
-  }
+  [hidden] { display: none !important; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body { font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  input { font: inherit; }
+
+  /* topbalk */
+  .top { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 92%, transparent);
+         backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+         padding: max(10px, env(safe-area-inset-top)) 12px 8px; display: flex; align-items: center; gap: 8px;
+         border-bottom: 1px solid var(--line); }
+  .back { border: 0; background: none; font-size: 26px; line-height: 1; padding: 2px 8px 4px 2px; color: var(--green); }
+  .title { flex: 1; min-width: 0; font-weight: 700; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pill { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--card);
+          border-radius: 999px; padding: 6px 10px; font-size: 13px; font-weight: 600; max-width: 55%; }
+  .pill span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #aaa; flex: none; }
+  .dot.on { background: var(--green); } .dot.busy { background: #e0a800; }
+
+  main { max-width: 640px; margin: 0 auto; padding: 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px; margin-bottom: 12px; }
+  h2 { font-size: 15px; margin: 0 0 8px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .muted { color: var(--muted); font-size: 14px; }
+  .btn { border: 0; border-radius: 10px; padding: 11px 14px; font-weight: 600; background: var(--green); color: #fff; }
+  .btn.soft { background: var(--green-soft); color: var(--green); }
+  .btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  .btn.danger { background: transparent; color: var(--red); border: 1px solid var(--line); }
+  .btn.small { padding: 7px 10px; font-size: 14px; }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btns > .btn { flex: 1 1 auto; }
+
+  /* lijsten */
+  .list { margin: 0; padding: 0; list-style: none; }
+  .item { display: flex; align-items: center; gap: 10px; padding: 10px 2px; border-top: 1px solid var(--line); }
+  .item:first-child { border-top: 0; }
+  .item .grow { flex: 1; min-width: 0; }
+  .item .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .sub { font-size: 13px; color: var(--muted); }
+  .chev { color: var(--muted); font-size: 20px; }
+  .thumb { width: 64px; height: 48px; flex: none; background: #fff; border-radius: 8px; border: 1px solid var(--line); }
+
+  /* maatregels */
+  .mrow { display: flex; align-items: center; gap: 8px; padding: 8px 6px; border-radius: 10px; margin: 2px -6px; }
+  .mrow.sel { background: var(--green-soft); }
+  .mrow.target { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
+  .mrow .lbl { flex: 1; min-width: 0; }
+  .mrow .val { font-variant-numeric: tabular-nums; font-weight: 700; border: 1px solid var(--line); background: var(--bg);
+               border-radius: 8px; padding: 6px 10px; min-width: 96px; text-align: right; }
+  .mrow .val.calc { font-weight: 500; color: var(--muted); font-style: italic; }
+  .aim { border: 0; background: none; width: 36px; height: 36px; border-radius: 50%; font-size: 18px; color: var(--muted); flex: none; }
+  .mrow.target .aim { color: #fff; background: var(--accent); }
+
+  .banner { position: sticky; top: 58px; z-index: 15; display: flex; align-items: center; gap: 8px;
+            background: var(--accent); color: #fff; border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; font-weight: 600; }
+  .banner.idle { background: var(--card); color: var(--muted); border: 1px dashed var(--line); font-weight: 500; font-size: 14px; }
+  .banner .grow { flex: 1; min-width: 0; }
+  .banner button { border: 0; background: rgba(255,255,255,.22); color: #fff; border-radius: 8px; padding: 6px 10px; font-weight: 700; }
+
+  .tabs { display: flex; background: var(--line); border-radius: 10px; padding: 3px; margin-bottom: 12px; }
+  .tabs button { flex: 1; border: 0; background: none; padding: 8px; border-radius: 8px; font-weight: 600; color: var(--muted); }
+  .tabs button.on { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+
+  .drawing { background: #fff; border-radius: 12px; border: 1px solid var(--line); overflow: hidden; margin-bottom: 10px; touch-action: manipulation; }
+  .drawing svg { display: block; width: 100%; height: auto; max-height: 62vh; }
+  .stats { display: flex; gap: 6px; flex-wrap: wrap; font-size: 13px; }
+  .stats span { background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; }
+  .warn { background: var(--warn-bg); color: var(--warn-ink); border-radius: 10px; padding: 8px 10px; font-size: 14px; margin-top: 8px; }
+
+  .seg { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+  .seg button { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 7px 10px; font-weight: 600; font-size: 14px; }
+  .seg button.on { background: var(--green); color: #fff; border-color: var(--green); }
+
+  .wallnav { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .wallnav .grow { flex: 1; text-align: center; font-weight: 700; }
+  .wallnav button { border: 1px solid var(--line); background: var(--card); border-radius: 10px; width: 44px; height: 40px; font-size: 18px; }
+  .ocard { border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; margin-bottom: 10px; }
+  .ocard.sel { border-color: var(--green); box-shadow: 0 0 0 1px var(--green); }
+  .ohead { display: flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 2px; }
+  .ohead .grow { flex: 1; }
+
+  /* sheet / overlay */
+  .veil { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
+  .sheet { background: var(--card); width: 100%; max-width: 640px; border-radius: 16px 16px 0 0; padding: 16px 16px max(16px, env(safe-area-inset-bottom));
+           max-height: 88vh; overflow: auto; }
+  .sheet h3 { margin: 0 0 12px; font-size: 18px; }
+  .sheet input[type=text] { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font-size: 20px; }
+  .sheet img { width: 100%; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+  pre.log { font: 11px/1.35 ui-monospace, Menlo, monospace; white-space: pre-wrap; word-break: break-all; max-height: 34vh; overflow: auto;
+            background: var(--bg); padding: 8px; border-radius: 8px; }
+  .toast { position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 60;
+           background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 20px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90vw; }
   .toast.show { opacity: 1; }
+  .empty { text-align: center; padding: 24px 8px; color: var(--muted); }
 </style>
 </head>
 <body>
-<main>
-  <h1>Lasermeter</h1>
-
-  <div id="noBle" class="card warn" hidden>
-    Deze browser ondersteunt geen Web Bluetooth. Op de iPhone: open deze pagina in de gratis app
-    <b>Bluefy – Web BLE Browser</b> (App Store). Op Android/computer: gebruik Chrome.
-  </div>
-
-  <div class="card">
-    <div class="status"><span id="dot" class="dot"></span><span id="statusText">Niet verbonden</span></div>
-    <div class="row">
-      <button id="btnConnect">Verbind met meter</button>
-      <button id="btnDisconnect" class="ghost" hidden>Verbreek</button>
-    </div>
-    <div class="row">
-      <button id="btnMeasure" class="secondary" disabled>Meet vanop telefoon</button>
-    </div>
-    <div class="row" style="margin-top:6px" hidden>
-      <button id="btnAny" class="ghost" style="font-size:13px;padding:8px">Meter niet gevonden? Toon alle apparaten</button>
-    </div>
-  </div>
-
-  <div class="card">
-    <div id="last" class="big">– m</div>
-    <div class="sub" id="lastSub">Druk op de meetknop van de meter</div>
-    <div class="row">
-      <input type="text" id="label" placeholder="Label voor volgende meting (bv. Keuken breedte)">
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="head"><h2>Metingen</h2><span id="count">0</span></div>
-    <ul id="list"></ul>
-    <div class="row">
-      <button id="btnCopy" class="secondary">Kopieer (CSV)</button>
-      <button id="btnCsv" class="secondary">Download CSV</button>
-      <button id="btnClear" class="ghost">Wis alles</button>
-    </div>
-  </div>
-
-  <div class="card">
-    <details>
-      <summary>Debug-log (ruwe Bluetooth-data)</summary>
-      <pre id="log"></pre>
-      <div class="row"><button id="btnCopyLog" class="ghost">Kopieer log</button></div>
-    </details>
-  </div>
-</main>
+<header class="top">
+  <button class="back" id="back" hidden aria-label="Terug">‹</button>
+  <div class="title" id="title">Lasermeter</div>
+  <button class="pill" id="pill"><span class="dot" id="dot"></span><span id="pillText">Verbind meter</span></button>
+</header>
+<main id="app"></main>
+<div id="veil" class="veil" hidden><div class="sheet" id="sheet"></div></div>
 <div id="toast" class="toast"></div>
-
-<script>
-'use strict';
-// Bosch BLE "MT protocol" — reverse engineered door hobbyisten (GLM 50 C / 100 C / 120 C)
-const SVC  = '02a6c0d0-0451-4000-b000-fb3210111989';
-const CHR  = '02a6c0d1-0451-4000-b000-fb3210111989';
-const CMD_AUTOSYNC = [0xC0, 0x55, 0x02, 0x01, 0x00, 0x1A]; // meter stuurt elke meting door
-const CMD_MEASURE  = [0xC0, 0x56, 0x01, 0x00, 0x1E];       // 1e keer: laser aan, 2e keer: meten
-const STORE = 'lasermeter.metingen.v1';
-const EXTRA_SVCS = ['0000fde8-0000-1000-8000-00805f9b34fb', '0000180a-0000-1000-8000-00805f9b34fb'];
-
-const $ = id => document.getElementById(id);
-let device = null, chr = null, manualClose = false;
-let items = load();
-
-// ---------- opslag ----------
-function load() {
-  try { return JSON.parse(localStorage.getItem(STORE)) || []; } catch { return []; }
-}
-function save() {
-  try { localStorage.setItem(STORE, JSON.stringify(items)); } catch {}
-}
-
-// ---------- helpers ----------
-const hex = buf => Array.from(new Uint8Array(buf.buffer || buf, buf.byteOffset || 0, buf.byteLength))
-  .map(b => b.toString(16).padStart(2, '0')).join(' ');
-function log(msg) {
-  const t = new Date().toLocaleTimeString('nl-BE');
-  const el = $('log');
-  el.textContent += `[${t}] ${msg}\n`;
-  el.scrollTop = el.scrollHeight;
-}
-function toast(msg) {
-  const t = $('toast'); t.textContent = msg; t.classList.add('show');
-  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 1800);
-}
-function errText(e) {
-  if (e === undefined) return '(undefined – geen foutinfo)';
-  if (e === null) return '(null)';
-  if (typeof e !== 'object') return typeof e + ': ' + String(e);
-  let out = (e.name || e.constructor && e.constructor.name || 'Object') + ': ' + (e.message || '');
-  try { const j = JSON.stringify(e); if (j && j !== '{}') out += ' ' + j; } catch {}
-  if (!e.message) out += ' ' + String(e);
-  return out;
-}
-window.addEventListener('error', ev => log('JS-fout: ' + ev.message + ' (r' + ev.lineno + ')'));
-window.addEventListener('unhandledrejection', ev => log('Onafgehandeld: ' + errText(ev.reason)));
-function setStatus(text, state) {
-  $('statusText').textContent = text;
-  $('dot').className = 'dot' + (state ? ' ' + state : '');
-  const on = state === 'on';
-  $('btnConnect').hidden = on;
-  $('btnDisconnect').hidden = !on;
-  $('btnMeasure').disabled = !on;
-}
-const fmt = m => m.toFixed(3).replace('.', ',') + ' m';
-const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-
-// ---------- protocol ----------
-// Meting: C0 55 10 06 .. .. .. [float32 little-endian, meter] op byte 7..10
-function parseDistance(dv) {
-  if (dv.byteLength >= 11 &&
-      dv.getUint8(0) === 0xC0 && dv.getUint8(1) === 0x55 &&
-      dv.getUint8(2) === 0x10 && dv.getUint8(3) === 0x06) {
-    const m = dv.getFloat32(7, true);
-    if (isFinite(m) && m >= 0 && m < 300) return m;
-  }
-  return null;
-}
-
-async function write(bytes, target) {
-  const c = target || chr;
-  const data = new Uint8Array(bytes);
-  log('→ ' + hex(data));
-  const p = c.properties || {};
-  const order = p.writeWithoutResponse && !p.write
-    ? ['writeValueWithoutResponse', 'writeValue']
-    : ['writeValueWithResponse', 'writeValue', 'writeValueWithoutResponse'];
-  let last;
-  for (const fn of order) {
-    if (typeof c[fn] !== 'function') continue;
-    try { return await c[fn](data); } catch (e) { last = e; log('  ' + fn + ' mislukt: ' + errText(e)); }
-  }
-  throw last || new Error('geen schrijfmethode');
-}
-
-function onNotify(ev) {
-  const dv = ev.target.value;
-  log('← ' + hex(dv));
-  const m = parseDistance(dv);
-  if (m === null) return;
-  if (m === 0) { log('(0 m genegeerd)'); return; }
-  addItem(m);
-}
-
-// ---------- verbinden ----------
-async function connect() {
-  device = null;
-  if (!navigator.bluetooth) { $('noBle').hidden = false; return; }
-  try {
-    setStatus('Apparaat kiezen…', 'busy');
-    // Bluefy weigert filters (fout 2), dus altijd alle apparaten tonen.
-    // Eerst met extra services, bij weigering zonder.
-    const tries = [
-      { acceptAllDevices: true, optionalServices: [SVC, ...EXTRA_SVCS] },
-      { acceptAllDevices: true, optionalServices: [SVC] },
-      { acceptAllDevices: true },
-    ];
-    let lastErr;
-    for (let i = 0; i < tries.length && !device; i++) {
-      const t0 = Date.now();
-      log('Zoeken (poging ' + (i + 1) + ')…');
-      try { device = await navigator.bluetooth.requestDevice(tries[i]); }
-      catch (e1) {
-        lastErr = e1;
-        const ms = Date.now() - t0;
-        log('Zoeken mislukt na ' + ms + ' ms: ' + errText(e1));
-        if (ms > 1500) throw e1; // gebruiker heeft de lijst gesloten: niet opnieuw vragen
-      }
-    }
-    if (!device) throw lastErr;
-    log('Gekozen: ' + (device.name || '(geen naam)') + ' ' + (device.id || ''));
-    device.addEventListener('gattserverdisconnected', onDisconnected);
-    await openGatt();
-  } catch (e) {
-    log('Fout: ' + errText(e));
-    const cancelled = e && e.name === 'NotFoundError';
-    setStatus(cancelled ? 'Geannuleerd / niets gevonden' : 'Verbinden mislukt', '');
-    if (!cancelled) toast('Verbinden mislukt – zie debug-log');
-  }
-}
-
-async function openGatt() {
-  setStatus('Verbinden met ' + (device.name || 'meter') + '…', 'busy');
-  const server = await device.gatt.connect();
-  log('GATT verbonden');
-  let svc;
-  try {
-    svc = await server.getPrimaryService(SVC);
-  } catch (e) {
-    log('Bosch-service niet gevonden: ' + e.message);
-    await explore(server);
-    return;
-  }
-  chr = await svc.getCharacteristic(CHR);
-  const p = chr.properties || {};
-  log('Kenmerk: notify=' + !!p.notify + ' indicate=' + !!p.indicate + ' write=' + !!p.write + ' writeNoResp=' + !!p.writeWithoutResponse);
-  chr.addEventListener('characteristicvaluechanged', onNotify);
-  await chr.startNotifications();
-  log('Notificaties aan');
-  await write(CMD_AUTOSYNC);
-  manualClose = false;
-  setStatus('Verbonden met ' + (device.name || 'meter'), 'on');
-  toast('Verbonden');
-}
-
-
-// ---------- verkenningsmodus (onbekend protocol, bv. AdvancedDistance 50C) ----------
-const ascii = dv => Array.from(new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength))
-  .map(b => b >= 32 && b < 127 ? String.fromCharCode(b) : '.').join('');
-function candidates(dv) {
-  const out = [];
-  for (let i = 0; i + 4 <= dv.byteLength; i++) {
-    const le = dv.getFloat32(i, true), be = dv.getFloat32(i, false);
-    if (le > 0.04 && le < 60) out.push('f32LE@' + i + '=' + le.toFixed(4));
-    if (be > 0.04 && be < 60) out.push('f32BE@' + i + '=' + be.toFixed(4));
-    const u32 = dv.getUint32(i, true);
-    if (u32 >= 40 && u32 <= 60000) out.push('u32LE@' + i + '=' + u32);
-  }
-  for (let i = 0; i + 2 <= dv.byteLength; i++) {
-    const u16 = dv.getUint16(i, true);
-    if (u16 >= 40 && u16 <= 60000) out.push('u16LE@' + i + '=' + u16);
-  }
-  return out;
-}
-const exploreChars = [];
-async function explore(server) {
-  log('== VERKENNINGSMODUS ==');
-  let svcs = [];
-  try { svcs = await server.getPrimaryServices(); } catch (e) { log('Services oplijsten mislukt: ' + errText(e)); }
-  log('Services: ' + svcs.map(s => s.uuid).join(', '));
-  for (const svc of svcs) {
-    let chars = [];
-    try { chars = await svc.getCharacteristics(); } catch (e) { log(' ' + svc.uuid + ': kenmerken mislukt: ' + errText(e)); continue; }
-    for (const c of chars) {
-      const p = c.properties || {};
-      const props = ['read','write','writeWithoutResponse','notify','indicate'].filter(k => p[k]).join(',');
-      log(' ' + svc.uuid.slice(4, 8) + ' / ' + c.uuid + ' [' + props + ']');
-      if (p.read) {
-        try { const v = await c.readValue(); log('   lees: ' + hex(v) + '  "' + ascii(v) + '"'); }
-        catch (e) { log('   lezen mislukt: ' + errText(e)); }
-      }
-      if (p.notify || p.indicate) {
-        c.addEventListener('characteristicvaluechanged', ev => {
-          const v = ev.target.value;
-          log('← ' + c.uuid.slice(0, 8) + ': ' + hex(v));
-          const cand = candidates(v);
-          if (cand.length) log('   kandidaten: ' + cand.slice(0, 12).join(' '));
-        });
-        try { await c.startNotifications(); log('   luisteren: aan'); }
-        catch (e) { log('   luisteren mislukt: ' + errText(e)); }
-      }
-      exploreChars.push(c);
-    }
-  }
-  manualClose = false;
-  const proto = exploreChars.find(c => /^02a6c0d/i.test(c.uuid) && (c.properties.notify || c.properties.indicate)
-                                      && (c.properties.write || c.properties.writeWithoutResponse));
-  if (proto) {
-    chr = proto;
-    proto.addEventListener('characteristicvaluechanged', ev => {
-      const m = parseDistance(ev.target.value);
-      if (m) addItem(m);
-    });
-    log('Bosch-kanaal gevonden: ' + proto.uuid + ' – startcommando sturen');
-    try { await write(CMD_AUTOSYNC, proto); } catch (e) { log('Startcommando mislukt: ' + errText(e)); }
-    setStatus('Verbonden met ' + (device.name || 'meter') + ' – meet met de meter', 'on');
-  } else {
-    setStatus('Verbonden (verkenningsmodus) – meet nu een paar keer', 'on');
-    $('btnMeasure').disabled = true;
-  }
-  toast('Verbonden – meet nu met de meter');
-  log('Meet nu 2–3 keer met de knop op de meter (bv. iets van ongeveer 1 m) en noteer de waarden op het scherm.');
-}
-
-function onDisconnected() {
-  log('Verbinding verbroken');
-  chr = null;
-  setStatus('Niet verbonden', '');
-  if (!manualClose && device) {
-    // meter valt na 5 min uit of verliest bereik: één keer opnieuw proberen
-    setTimeout(async () => {
-      if (!device || device.gatt.connected || manualClose) return;
-      try { log('Opnieuw verbinden…'); await openGatt(); }
-      catch (e) { log('Herverbinden mislukt: ' + e.message); setStatus('Niet verbonden', ''); }
-    }, 1500);
-  }
-}
-
-// ---------- metingen ----------
-function addItem(m) {
-  const label = $('label').value.trim();
-  items.unshift({ id: Date.now() + Math.random(), m, label, t: new Date().toISOString() });
-  $('label').value = '';
-  save(); render();
-  $('last').textContent = fmt(m);
-  $('lastSub').textContent = label || 'Opgeslagen';
-  if (navigator.vibrate) navigator.vibrate(30);
-}
-
-function render() {
-  $('count').textContent = items.length + (items.length === 1 ? ' meting' : ' metingen');
-  const ul = $('list');
-  if (!items.length) { ul.innerHTML = '<li class="empty">Nog geen metingen.</li>'; return; }
-  ul.innerHTML = items.map(it => {
-    const d = new Date(it.t);
-    return `<li data-id="${it.id}">
-      <span class="val">${fmt(it.m)}</span>
-      <span class="meta"><div class="lbl">${esc(it.label || '—')}</div>
-        <div class="time">${d.toLocaleDateString('nl-BE')} ${d.toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'})}</div></span>
-      <button class="x" data-act="edit" title="Label wijzigen">✎</button>
-      <button class="x" data-act="del" title="Verwijderen">×</button>
-    </li>`;
-  }).join('');
-}
-
-$('list').addEventListener('click', e => {
-  const btn = e.target.closest('button'); if (!btn) return;
-  const li = btn.closest('li'); const id = Number(li.dataset.id);
-  const it = items.find(x => x.id === id); if (!it) return;
-  if (btn.dataset.act === 'del') {
-    items = items.filter(x => x !== it); save(); render(); toast('Verwijderd');
-  } else if (btn.dataset.act === 'edit') {
-    const lbl = li.querySelector('.lbl');
-    const inp = document.createElement('input');
-    inp.type = 'text'; inp.value = it.label || '';
-    lbl.replaceWith(inp); inp.focus();
-    const done = () => { it.label = inp.value.trim(); save(); render(); };
-    inp.addEventListener('blur', done);
-    inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') inp.blur(); });
-  }
-});
-
-function csv() {
-  const rows = [['datum', 'tijd', 'label', 'afstand_m']];
-  items.slice().reverse().forEach(it => {
-    const d = new Date(it.t);
-    rows.push([d.toLocaleDateString('nl-BE'), d.toLocaleTimeString('nl-BE'), it.label || '', it.m.toFixed(3).replace('.', ',')]);
-  });
-  return rows.map(r => r.map(v => /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v).join(';')).join('\n');
-}
-
-async function copyText(text, what) {
-  try { await navigator.clipboard.writeText(text); toast(what + ' gekopieerd'); }
-  catch {
-    const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta);
-    ta.select(); try { document.execCommand('copy'); toast(what + ' gekopieerd'); } catch { toast('Kopiëren mislukt'); }
-    ta.remove();
-  }
-}
-
-// ---------- knoppen ----------
-$('btnConnect').onclick = () => connect(false);
-$('btnAny').onclick = () => connect(true);
-$('btnDisconnect').onclick = () => { manualClose = true; if (device && device.gatt.connected) device.gatt.disconnect(); };
-$('btnMeasure').onclick = async () => { try { await write(CMD_MEASURE); } catch (e) { log('Meten mislukt: ' + e.message); } };
-$('btnCopy').onclick = () => copyText(csv(), 'Metingen');
-$('btnCsv').onclick = () => {
-  const blob = new Blob(['﻿' + csv()], { type: 'text/csv;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'metingen-' + new Date().toISOString().slice(0, 10) + '.csv';
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-};
-$('btnClear').onclick = () => {
-  const b = $('btnClear');
-  if (b.dataset.armed) { items = []; save(); render(); b.textContent = 'Wis alles'; delete b.dataset.armed; toast('Alles gewist'); }
-  else { b.dataset.armed = 1; b.textContent = 'Zeker? Tik opnieuw'; setTimeout(() => { b.textContent = 'Wis alles'; delete b.dataset.armed; }, 3000); }
-};
-$('btnCopyLog').onclick = () => copyText($('log').textContent, 'Log');
-
-if (!navigator.bluetooth) { $('noBle').hidden = false; $('btnConnect').disabled = true; $('btnAny').disabled = true; }
-if (items.length) $('last').textContent = fmt(items[0].m);
-render();
-log('Klaar. Web Bluetooth: ' + (navigator.bluetooth ? 'ja' : 'nee') + ' | versie 5 | ' + navigator.userAgent);
-if (navigator.bluetooth && navigator.bluetooth.getAvailability) {
-  navigator.bluetooth.getAvailability().then(a => log('Bluetooth beschikbaar: ' + a)).catch(e => log('getAvailability: ' + errText(e)));
-}
-</script>
+<input type="file" id="fileIn" accept=".json,application/json" hidden>
+<script src="geo.js?v=7"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>

@@ -98,7 +98,7 @@ function anglesFromPts(pts) {
 // Onbekenden: alle muurlengtes + binnenhoeken 1..n-1 (hoek 0 volgt uit de som).
 // Gewogen kleinste kwadraten (Levenberg–Marquardt): plan moet sluiten,
 // gemeten lengtes/ingegeven hoeken liggen (bijna) vast, de rest past zich aan.
-function solveRoom(room) {
+function solveRoom(room, pass = 0) {
   const W = room.walls, C = room.corners, n = W.length;
   if (n < 3) return { closure: 0 };
   const tL = W.map(w => w.len);
@@ -167,6 +167,8 @@ function solveRoom(room) {
   let maxDev = 0;
   for (let i = 0; i < n; i++) if (W[i].measured) maxDev = Math.max(maxDev, Math.abs(x[i] - W[i].len));
   room.closure = Math.hypot(px, py) + maxDev;
+  // vrije hoeken hadden hun oude waarde als (zwak) doel: nog een ronde vanaf de nieuwe stand
+  if (pass < 3 && C.some(c => c.mode === 'vrij')) return solveRoom(room, pass + 1);
   return { closure: room.closure };
 }
 
