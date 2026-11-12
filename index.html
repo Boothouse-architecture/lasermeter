@@ -188,14 +188,20 @@ function parseDistance(dv) {
   return null;
 }
 
-async function write(bytes) {
+async function write(bytes, target) {
+  const c = target || chr;
   const data = new Uint8Array(bytes);
   log('→ ' + hex(data));
-  if (chr.writeValueWithoutResponse && chr.properties && chr.properties.writeWithoutResponse) {
-    try { return await chr.writeValueWithoutResponse(data); } catch (e) { log('write w/o resp faalde: ' + e.message); }
+  const p = c.properties || {};
+  const order = p.writeWithoutResponse && !p.write
+    ? ['writeValueWithoutResponse', 'writeValue']
+    : ['writeValueWithResponse', 'writeValue', 'writeValueWithoutResponse'];
+  let last;
+  for (const fn of order) {
+    if (typeof c[fn] !== 'function') continue;
+    try { return await c[fn](data); } catch (e) { last = e; log('  ' + fn + ' mislukt: ' + errText(e)); }
   }
-  if (chr.writeValueWithResponse) return chr.writeValueWithResponse(data);
-  return chr.writeValue(data);
+  throw last || new Error('geen schrijfmethode');
 }
 
 function onNotify(ev) {
@@ -318,8 +324,21 @@ async function explore(server) {
     }
   }
   manualClose = false;
-  setStatus('Verbonden (verkenningsmodus) – meet nu een paar keer', 'on');
-  $('btnMeasure').disabled = true;
+  const proto = exploreChars.find(c => /^02a6c0d/i.test(c.uuid) && (c.properties.notify || c.properties.indicate)
+                                      && (c.properties.write || c.properties.writeWithoutResponse));
+  if (proto) {
+    chr = proto;
+    proto.addEventListener('characteristicvaluechanged', ev => {
+      const m = parseDistance(ev.target.value);
+      if (m) addItem(m);
+    });
+    log('Bosch-kanaal gevonden: ' + proto.uuid + ' – startcommando sturen');
+    try { await write(CMD_AUTOSYNC, proto); } catch (e) { log('Startcommando mislukt: ' + errText(e)); }
+    setStatus('Verbonden met ' + (device.name || 'meter') + ' – meet met de meter', 'on');
+  } else {
+    setStatus('Verbonden (verkenningsmodus) – meet nu een paar keer', 'on');
+    $('btnMeasure').disabled = true;
+  }
   toast('Verbonden – meet nu met de meter');
   log('Meet nu 2–3 keer met de knop op de meter (bv. iets van ongeveer 1 m) en noteer de waarden op het scherm.');
 }
@@ -424,7 +443,7 @@ $('btnCopyLog').onclick = () => copyText($('log').textContent, 'Log');
 if (!navigator.bluetooth) { $('noBle').hidden = false; $('btnConnect').disabled = true; $('btnAny').disabled = true; }
 if (items.length) $('last').textContent = fmt(items[0].m);
 render();
-log('Klaar. Web Bluetooth: ' + (navigator.bluetooth ? 'ja' : 'nee') + ' | versie 4 | ' + navigator.userAgent);
+log('Klaar. Web Bluetooth: ' + (navigator.bluetooth ? 'ja' : 'nee') + ' | versie 5 | ' + navigator.userAgent);
 if (navigator.bluetooth && navigator.bluetooth.getAvailability) {
   navigator.bluetooth.getAvailability().then(a => log('Bluetooth beschikbaar: ' + a)).catch(e => log('getAvailability: ' + errText(e)));
 }
